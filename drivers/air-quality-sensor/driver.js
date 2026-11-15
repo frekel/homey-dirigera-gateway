@@ -33,6 +33,7 @@ module.exports = class DirigeraAirQualitySensorDriver extends DirigeraDriver {
       pairable.push({
         data: { id },
         name: this.getNameForPairing(device, customName || model || (alpstuga ? 'ALPSTUGA' : 'TIMMERFLOTTE')),
+        icon: alpstuga ? '/icon.svg' : '/timmerflotte.svg',
         capabilities,
       });
     }

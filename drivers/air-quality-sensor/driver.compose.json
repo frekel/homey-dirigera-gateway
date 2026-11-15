@@ -1,7 +1,7 @@
 {
   "name": {
-    "en": "ALPSTUGA / TIMMERFLOTTE",
-    "sv": "ALPSTUGA / TIMMERFLOTTE"
+    "en": "Temperature Sensor",
+    "sv": "Temperature Sensor"
   },
   "class": "sensor",
   "capabilities": [

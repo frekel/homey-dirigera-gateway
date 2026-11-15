@@ -101,6 +101,7 @@ test('ALPSTUGA pairs with all four measurements even though canReceive lists onl
   assert.equal(list.length, 1);
   assert.equal(list[0].data.id, 'alpstuga_1');
   assert.equal(list[0].name, 'Office air');
+  assert.equal(list[0].icon, '/icon.svg');
   assert.deepEqual(list[0].capabilities, ['measure_co2', 'measure_pm25', 'measure_temperature', 'measure_humidity']);
 });
 
@@ -233,6 +234,7 @@ test('TIMMERFLOTTE pairs once per hub and reads both endpoints at startup and af
   ]).onPairListDevices();
   assert.deepEqual(list.map(entry => entry.data.id), ['B:timmer', 'A:timmer']);
   assert.equal(list[1].name, 'Hall (Upstairs)');
+  assert.equal(list[1].icon, '/timmerflotte.svg');
   assert.deepEqual(list[1].capabilities, ['measure_temperature', 'measure_humidity', 'measure_battery']);
 
   const { device, readings } = deviceFor();
