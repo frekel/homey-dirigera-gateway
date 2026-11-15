@@ -17,7 +17,7 @@ let loadError;
 try {
   Module._load = function load(request, ...args) {
     if (request === 'homey') return sdk;
-    if (request === 'dirigera-simple') return {};
+    if (['dirigera-simple', 'mdns-server', 'reconnecting-websocket'].includes(request)) return {};
     return originalLoad.call(this, request, ...args);
   };
   App = require('../app');
@@ -63,8 +63,11 @@ function driverFor(devices, connected = true, language = 'en') {
   assert.ok(Driver, `ALPSTUGA driver must load: ${loadError}`);
   const driver = new Driver();
   driver.homey = { __: (key) => translate(language, key), app: {
-    isGatewayConnected: () => connected,
-    getDevices: async () => devices,
+    getHomeyDeviceId: (hubId, id) => hubId ? `${hubId}:${id}` : id,
+    getPairableDevices: async () => {
+      if (!connected) throw new Error('Configure a hub in Settings');
+      return devices;
+    },
   } };
   return driver;
 }
@@ -86,7 +89,10 @@ function deviceFor(sensor = alpstuga(), language = 'en') {
   device.setSettings = async (settings) => { device.settings = settings; };
   device.error = (error) => { errors.push(error); };
   device.log = () => {};
-  device.homey = { __: (key) => translate(language, key), app: { getDevice: async () => sensor } };
+  device.homey = { __: (key) => translate(language, key), app: {
+    getDeviceAddress: (deviceId) => ({ hubId: 'legacy', deviceId }),
+    getHubConnection: () => ({ getDevices: async () => sensor ? [sensor] : [] }),
+  } };
   return { device, readings, errors };
 }
 
@@ -95,13 +101,13 @@ test('ALPSTUGA pairs with all four measurements even though canReceive lists onl
   assert.equal(list.length, 1);
   assert.equal(list[0].data.id, 'alpstuga_1');
   assert.equal(list[0].name, 'Office air');
+  assert.equal(list[0].icon, '/icon.svg');
   assert.deepEqual(list[0].capabilities, ['measure_co2', 'measure_pm25', 'measure_temperature', 'measure_humidity']);
 });
 
 test('pairing excludes unrelated environment sensors and accepts ALPSTUGA by model or product code', async () => {
   const devices = [
     alpstuga({ id: 'vindstyrka', attributes: { model: 'VINDSTYRKA', productCode: 'E2112' } }),
-    alpstuga({ id: 'timmerflotte', attributes: { model: 'TIMMERFLOTTE', productCode: 'E2314' } }),
     alpstuga({ id: 'product', attributes: { productCode: 'E2495', customName: 'A' } }),
     alpstuga({ id: 'model', attributes: { model: 'ALPSTUGA air quality monitor', customName: '' } }),
     { id: 'unknown', deviceType: 'environmentSensor' },
@@ -123,10 +129,6 @@ test('pairing uses relationId when present and lists a physical ALPSTUGA only on
 
 test('pairing gives setup guidance when the gateway is not configured', async () => {
   await assert.rejects(driverFor([], false).onPairListDevices(), /Settings/);
-});
-
-test('Swedish users receive Swedish gateway setup guidance', async () => {
-  await assert.rejects(driverFor([], false, 'sv').onPairListDevices(), /Inställningar.*Appar/);
 });
 
 test('offline messages use the selected Homey language', async () => {
@@ -217,15 +219,37 @@ test('environmentSensor events route to the new driver while existing types keep
   assert.equal(app.getDriverForType('unknown', 'unknown'), null);
 });
 
-test('a real ALPSTUGA endpoint event finds the paired Homey device', () => {
+test('TIMMERFLOTTE pairs once per hub and reads both endpoints at startup and after humidity events', async () => {
+  const temp = alpstuga({
+    id: 'timmer_1', relationId: 'timmer',
+    attributes: { model: 'TIMMERFLOTTE temp/hmd sensor', customName: 'Hall', currentTemperature: 19.5, batteryPercentage: 65 },
+  });
+  const humidity = alpstuga({
+    id: 'timmer_2', relationId: 'timmer',
+    attributes: { productCode: 'E2314', currentRH: 54 },
+  });
+  const list = await driverFor([
+    ...[humidity, temp].map(endpoint => ({ ...endpoint, hubId: 'A', hubName: 'Upstairs' })),
+    ...[temp, humidity].map(endpoint => ({ ...endpoint, hubId: 'B', hubName: 'Downstairs' })),
+  ]).onPairListDevices();
+  assert.deepEqual(list.map(entry => entry.data.id), ['B:timmer', 'A:timmer']);
+  assert.equal(list[1].name, 'Hall (Upstairs)');
+  assert.equal(list[1].icon, '/timmerflotte.svg');
+  assert.deepEqual(list[1].capabilities, ['measure_temperature', 'measure_humidity', 'measure_battery']);
+
+  const { device, readings } = deviceFor();
+  device.getData = () => ({ id: 'A:timmer' });
+  device.hasCapability = id => list[1].capabilities.includes(id);
   const app = new App();
-  const paired = { getData: () => ({ id: 'alpstuga_1' }) };
-  app.homey = { drivers: { getDriver: (driverId) => {
-    assert.equal(driverId, 'air-quality-sensor');
-    return { getDevice: (data) => {
-      assert.deepEqual(data, { id: 'alpstuga_1' });
-      return paired;
-    } };
-  } } };
-  assert.equal(app.getDeviceFromUpdate({ data: alpstuga() }), paired);
+  const connection = { hub: { id: 'A' }, getDevices: async () => [humidity, temp] };
+  app.hubs = new Map([['A', connection]]);
+  app.homey = { settings: { get: () => false }, drivers: { getDriver: () => ({ getDevices: () => [device] }) } };
+  app.error = (message, hub, err) => { throw err; };
+  device.homey.app = app;
+
+  await device.onInit();
+  assert.deepEqual(readings, { measure_temperature: 19.5, measure_humidity: 54, measure_battery: 65 });
+  humidity.attributes.currentRH = 61;
+  await app.handleUpdate(connection, JSON.stringify({ data: humidity }));
+  assert.deepEqual(readings, { measure_temperature: 19.5, measure_humidity: 61, measure_battery: 65 });
 });

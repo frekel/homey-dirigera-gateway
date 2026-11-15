@@ -7,12 +7,13 @@ const MEASUREMENTS = {
   measure_pm25: 'currentPM25',
   measure_temperature: 'currentTemperature',
   measure_humidity: 'currentRH',
+  measure_battery: 'batteryPercentage',
 };
 
 module.exports = class DirigeraAirQualitySensorDevice extends DirigeraDevice {
 
   async onInit() {
-    const device = await this.homey.app.getDevice(this.getData().id);
+    const device = await this.getInitialDirigeraDevice();
     await this.updateSettings(device);
     await this.updateCapabilities(device);
     this.log(`Dirigera Air Quality sensor ${this.getName()} has been initialized`);
