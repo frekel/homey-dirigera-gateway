@@ -1,7 +1,7 @@
 {
   "name": {
-    "en": "ALPSTUGA Air Quality Monitor",
-    "sv": "ALPSTUGA Luftkvalitetsmätare"
+    "en": "ALPSTUGA / TIMMERFLOTTE",
+    "sv": "ALPSTUGA / TIMMERFLOTTE"
   },
   "class": "sensor",
   "capabilities": [

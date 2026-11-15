@@ -260,9 +260,6 @@ class IkeaDirigeraGatewayApp extends Homey.App {
         if (deviceType === 'openCloseSensor') {
           driverId = 'door-window-sensor';
         }
-        if (deviceType === 'environmentSensor') {
-          driverId = 'air-quality-sensor';
-        }
         break;
     }
     // Matter based sensors (MYGGSPRAY) are reported as an occupancySensor plus a
@@ -272,6 +269,9 @@ class IkeaDirigeraGatewayApp extends Homey.App {
     }
     if (deviceType === 'occupancySensor' || deviceType === 'lightSensor') {
       driverId = 'motion-sensor';
+    }
+    if (deviceType === 'environmentSensor') {
+      driverId = 'air-quality-sensor';
     }
     if (driverId != null) {
       return this.homey.drivers.getDriver(driverId);
